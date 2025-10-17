@@ -131,7 +131,7 @@ const SimpleHexGlobe = () => {
     // Load Earth GLB dengan brightness adjustment
     const loader = new GLTFLoader();
     loader.load(
-      '/models/earth (4).glb',
+      '/models/earth.glb',
       (gltf) => {
         const earth = gltf.scene;
         earth.scale.set(1.1, 1.1, 1.1);
