@@ -41,5 +41,5 @@ yarn-error.log*
 next-env.d.ts
 
 # Earth Engine credentials
-service-account-key.json
+gaia-project-475508-c80ebd630874.json
 .env.local
