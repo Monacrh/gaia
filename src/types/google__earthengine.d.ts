@@ -13,7 +13,7 @@ declare module '@google/earthengine' {
   }
 
   export interface Image {
-    select(band: string): Image;
+    select(bands: string | string[]): Image;
     subtract(other: Image): Image;
     divide(other: Image): Image;
     add(other: Image): Image;
@@ -42,7 +42,7 @@ declare module '@google/earthengine' {
     map(callback: (image: Image) => Image): ImageCollection;
     select(band: string): ImageCollection;
     median(): Image;
-    getInfo(callback: (result: unknown) => void): void;
+    getInfo(callback: (result: unknown, error?: string) => void): void;
   }
 
   export interface Filter {
@@ -54,11 +54,11 @@ declare module '@google/earthengine' {
   }
 
   export interface Dictionary {
-    getInfo(callback: (result: unknown) => void): void;
+    getInfo(callback: (result: unknown, error?: string) => void): void;
   }
 
   export interface FeatureCollection {
-    getInfo(callback: (result: unknown) => void): void;
+    getInfo(callback: (result: unknown, error?: string) => void): void;
   }
 
   export const Geometry: Geometry;

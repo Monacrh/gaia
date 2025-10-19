@@ -265,9 +265,9 @@ export default function HomePage() {
   return (
     <main className="w-screen h-screen bg-black">
       {/* Kita buat container dengan ukuran penuh dan latar belakang hitam */}
-      <div className="w-full h-full">
+      
         <VoxelGlobe />
-      </div>
+    
     </main>
   );
 }
