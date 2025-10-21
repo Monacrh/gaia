@@ -2,64 +2,11 @@
 
 import { useRef, useMemo, Suspense, useEffect } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, useTexture } from '@react-three/drei'
+import { OrbitControls, useTexture, Stars } from '@react-three/drei'
 import * as THREE from 'three'
 import { useAppStore } from '../../lib/store'
 import { intensityToColor } from '../../lib/colorMapping'
 import { normalizeCoordinates } from '../../lib/bloomingApi'
-
-// Starfield component
-function Starfield() {
-  const starSprite = useTexture('/textures/circle.png')
-  
-  const points = useMemo(() => {
-    function randomSpherePoint() {
-      const radius = Math.random() * 25 + 25
-      const u = Math.random()
-      const v = Math.random()
-      const theta = 2 * Math.PI * u
-      const phi = Math.acos(2 * v - 1)
-      const x = radius * Math.sin(phi) * Math.cos(theta)
-      const y = radius * Math.sin(phi) * Math.sin(theta)
-      const z = radius * Math.cos(phi)
-
-      return {
-        pos: new THREE.Vector3(x, y, z),
-        hue: 0.6,
-        minDist: radius,
-      }
-    }
-
-    const verts = []
-    const colors = []
-    const positions = []
-    let col
-    for (let i = 0; i < 4500; i += 1) {
-      const p = randomSpherePoint()
-      const { pos, hue } = p
-      positions.push(p)
-      col = new THREE.Color().setHSL(hue, 0.1, Math.random() * 0.5 + 0.5)
-      verts.push(pos.x, pos.y, pos.z)
-      colors.push(col.r, col.g, col.b)
-    }
-    
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3))
-    geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3))
-    
-    const mat = new THREE.PointsMaterial({
-      size: 0.3,
-      vertexColors: true,
-      map: starSprite,
-      transparent: true,
-      opacity: 0.8
-    })
-    
-    return new THREE.Points(geo, mat)
-  }, [starSprite])
-
-  return <primitive object={points} />
-}
 
 // Earth Globe component with custom shaders and mouse interactivity
 function EarthGlobe() {
@@ -342,18 +289,6 @@ function EarthGlobe() {
     uniforms.mouseUV.value = globeUVRef.current
   }
 
-  // Convert 3D point to geographical coordinates (lat/lng)
-  const pointToLatLng = (point: THREE.Vector3): { lat: number; lng: number } => {
-    // Normalize the vector
-    const normalized = point.clone().normalize()
-
-    // Calculate latitude (phi) and longitude (theta)
-    const lat = Math.asin(normalized.y) * (180 / Math.PI)
-    const lng = Math.atan2(normalized.x, normalized.z) * (180 / Math.PI)
-
-    return { lat, lng }
-  }
-
   // Convert UV coordinates to geographical coordinates (more accurate for globe interaction)
   const uvToLatLng = (uv: THREE.Vector2): { lat: number; lng: number } => {
     // UV coordinates: u (0-1) maps to longitude (-180 to 180), v (0-1) maps to latitude (-90 to 90)
@@ -366,6 +301,14 @@ function EarthGlobe() {
     
     return { lat, lng }
   }
+
+  // Cursor hover state
+  const isHoveringRef = useRef(false)
+  const isDraggingRef = useRef(false)
+  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null)
+  const dragThreshold = 5 // pixels - minimum movement to consider as drag
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const clickDataRef = useRef<any>(null)
 
   // Pointer down handler - hanya menyimpan data, tidak langsung proses
   const handleGlobePointerDown = (event: any) => {
@@ -550,7 +493,7 @@ function EarthGlobe() {
     return material
   }, [oceanTexture])
 
-  // Animation loop - EXACT from original vertex-earth
+  // Animation loop
   useFrame((state) => {
     if (globeGroupRef.current) {
       globeGroupRef.current.rotation.y += 0.002
@@ -562,14 +505,6 @@ function EarthGlobe() {
       oceanMatRef.current.uniforms.time.value = state.clock.getElapsedTime()
     }
   })
-
-  // Cursor hover state
-  const isHoveringRef = useRef(false)
-  const isDraggingRef = useRef(false)
-  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null)
-  const dragThreshold = 5 // pixels - minimum movement to consider as drag
-  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const clickDataRef = useRef<any>(null)
   
   // Mouse event handler with cursor effects
   useEffect(() => {
@@ -738,7 +673,7 @@ export default function Globe({ className }: GlobeProps) {
       <Suspense fallback={<GlobeLoading />}>
         <Canvas
           camera={{ 
-            position: [0, 0, 4], // EXACT from original vertex-earth
+            position: [0, 0, 4],
             fov: 45,
             near: 0.1,
             far: 1000
@@ -746,14 +681,22 @@ export default function Globe({ className }: GlobeProps) {
           gl={{ antialias: true }}
           style={{ 
             background: 'black',
-            cursor: 'inherit' // Let parent handle cursor
+            cursor: 'inherit'
           }}
         >
           {/* Lighting */}
           <hemisphereLight args={[0xffffff, 0x080820, 3]} />
           
-          {/* Starfield */}
-          <Starfield />
+          {/* Starfield - using drei Stars component */}
+          <Stars 
+            radius={50} 
+            depth={50} 
+            count={5000} 
+            factor={4} 
+            saturation={0.1} 
+            fade 
+            speed={0.5}
+          />
           
           {/* Earth Globe */}
           <EarthGlobe />
