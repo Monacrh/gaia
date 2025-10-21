@@ -135,7 +135,7 @@ const getInitialBloomMode = (): boolean => {
   }
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useAppStore = create<AppState>((set) => ({
   // Initial state - always start with default values to avoid hydration mismatch
   isPanelOpen: false,
   isMinimized: false,

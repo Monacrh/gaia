@@ -5,7 +5,6 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { useAppStore } from '../../lib/store'
-import { calculateBloomIntensity, pointToLatLng } from '../../lib/bloomUtils'
 import { intensityToColor } from '../../lib/colorMapping'
 import { normalizeCoordinates } from '../../lib/bloomingApi'
 
@@ -289,13 +288,15 @@ function EarthGlobe() {
   // Create geometries - EXACT from original vertex-earth
   const wireframeGeo = useMemo(() => new THREE.IcosahedronGeometry(1, 16), [])
   const pointsGeo = useMemo(() => new THREE.IcosahedronGeometry(1, 120), [])
+  const oceanGeo = useMemo(() => new THREE.IcosahedronGeometry(1, 128), []) // High subdivision for smooth ocean
   
   // Create materials - EXACT from original vertex-earth
   const wireframeMat = useMemo(() => new THREE.MeshBasicMaterial({ 
     color: 0x0099ff,
     wireframe: true,
     transparent: true,
-    opacity: 0.1
+    opacity: 0.0, // Hide wireframe to prevent triangle lines on ocean
+    visible: false // Make wireframe invisible but still clickable
   }), [])
   
   const pointsMat = useMemo(() => new THREE.ShaderMaterial({
@@ -428,12 +429,138 @@ function EarthGlobe() {
     console.log('🌍 Globe click: Opening both panels for location:', { lat, lng })
   }
 
+  // Load textures at component level (not inside useMemo)
+  const oceanTexture = useTexture('/textures/00_earthmap1k.jpg')
+
+  // Ocean material reference for animation updates
+  const oceanMatRef = useRef<THREE.ShaderMaterial | null>(null)
+
+  // Ocean material for solid layer with enhanced visual effects
+  const oceanMat = useMemo(() => {
+    
+    // Create ocean shader material with animation and visual effects
+    const oceanVertexShader = `
+      uniform float time;
+      varying vec2 vUv;
+      varying vec3 vNormal;
+      varying vec3 vPosition;
+      varying vec3 vViewPosition;
+      
+      void main() {
+        vUv = uv;
+        vNormal = normalize(normalMatrix * normal);
+        
+        // Wave animation using sine/cosine functions
+        vec3 pos = position;
+        float wave1 = sin(pos.x * 10.0 + time * 0.5) * 0.002;
+        float wave2 = cos(pos.z * 8.0 + time * 0.7) * 0.002;
+        float wave3 = sin(pos.y * 12.0 + time * 0.3) * 0.001;
+        pos += normal * (wave1 + wave2 + wave3);
+        
+        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+        vViewPosition = -mvPosition.xyz;
+        vPosition = pos;
+        
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `
+    
+    const oceanFragmentShader = `
+      uniform sampler2D oceanTexture;
+      uniform float time;
+      varying vec2 vUv;
+      varying vec3 vNormal;
+      varying vec3 vPosition;
+      varying vec3 vViewPosition;
+      
+      void main() {
+        vec3 color = texture2D(oceanTexture, vUv).rgb;
+        
+        // Ocean detection based on color (blue/dark areas)
+        float blue = color.b;
+        float green = color.g;
+        float red = color.r;
+        
+        // More aggressive ocean detection to cover all water areas
+        bool isOcean = (blue > red * 1.05 && blue > green * 1.05) || 
+                       ((blue + green + red) < 1.15);
+        
+        // If it's ocean, apply enhanced rendering
+        if (isOcean) {
+          // Base ocean colors - deep to shallow
+          vec3 deepOcean = vec3(0.0, 0.1, 0.3);
+          vec3 shallowOcean = vec3(0.0, 0.4, 0.7);
+          vec3 baseOceanColor = mix(deepOcean, shallowOcean, blue);
+          
+          // Normal mapping simulation with animated waves
+          vec2 normalUV = vUv * 20.0;
+          float normalWave1 = sin(normalUV.x * 3.0 + time * 0.8) * 0.5 + 0.5;
+          float normalWave2 = cos(normalUV.y * 2.5 + time * 0.6) * 0.5 + 0.5;
+          vec3 perturbedNormal = normalize(vNormal + vec3(
+            (normalWave1 - 0.5) * 0.1,
+            (normalWave2 - 0.5) * 0.1,
+            0.0
+          ));
+          
+          // Fresnel effect - edges are brighter
+          vec3 viewDir = normalize(vViewPosition);
+          float fresnel = pow(1.0 - abs(dot(viewDir, perturbedNormal)), 3.0);
+          vec3 fresnelColor = vec3(0.3, 0.6, 1.0);
+          
+          // Specular highlights - simulated light reflection
+          vec3 lightDir = normalize(vec3(1.0, 1.0, 0.5));
+          vec3 reflectDir = reflect(-lightDir, perturbedNormal);
+          float specular = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+          
+          // Animated shimmer effect
+          float shimmer = sin(vUv.x * 50.0 + time * 2.0) * 
+                         cos(vUv.y * 50.0 + time * 1.5) * 0.1 + 0.9;
+          
+          // Combine all effects
+          vec3 finalColor = baseOceanColor;
+          finalColor += fresnelColor * fresnel * 0.4; // Fresnel glow
+          finalColor += vec3(1.0, 1.0, 1.0) * specular * 0.6; // Specular highlights
+          finalColor *= shimmer; // Subtle shimmer
+          
+          // Add depth variation
+          float depth = 1.0 - blue * 0.3;
+          finalColor *= depth;
+          
+          gl_FragColor = vec4(finalColor, 1.0);
+        } else {
+          // Land area - discard to show points underneath
+          discard;
+        }
+      }
+    `
+    
+    const oceanUniforms = {
+      oceanTexture: { value: oceanTexture },
+      time: { value: 0.0 }
+    }
+    
+    const material = new THREE.ShaderMaterial({
+      uniforms: oceanUniforms,
+      vertexShader: oceanVertexShader,
+      fragmentShader: oceanFragmentShader,
+      transparent: true
+    })
+    
+    oceanMatRef.current = material
+    return material
+  }, [oceanTexture])
+
   // Animation loop - EXACT from original vertex-earth
   useFrame((state) => {
     if (globeGroupRef.current) {
       globeGroupRef.current.rotation.y += 0.002
     }
     handleRaycast(state.camera)
+    
+    // Update ocean animation time
+    if (oceanMatRef.current && oceanMatRef.current.uniforms.time) {
+      oceanMatRef.current.uniforms.time.value = state.clock.getElapsedTime()
+    }
   })
 
   // Cursor hover state
@@ -564,56 +691,6 @@ function EarthGlobe() {
     }
   }, [])
 
-  // Load textures at component level (not inside useMemo)
-  const oceanTexture = useTexture('/textures/00_earthmap1k.jpg')
-
-  // Ocean material for solid layer with better ocean detection
-  const oceanMat = useMemo(() => {
-    
-    // Create ocean shader material
-    const oceanVertexShader = `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `
-    
-    const oceanFragmentShader = `
-      uniform sampler2D oceanTexture;
-      varying vec2 vUv;
-      
-      void main() {
-        vec3 color = texture2D(oceanTexture, vUv).rgb;
-        
-        // Ocean detection based on color (blue/dark areas)
-        float blue = color.b;
-        float green = color.g;
-        float red = color.r;
-        
-        // If it's predominantly blue/dark (ocean), make it solid
-        if (blue > red && blue > green && (blue + green + red) < 1.2) {
-          // Ocean area - solid blue
-          gl_FragColor = vec4(mix(vec3(0.0, 0.1, 0.3), vec3(0.0, 0.4, 0.8), blue), 1.0);
-        } else {
-          // Land area - discard to show points underneath
-          discard;
-        }
-      }
-    `
-    
-    const oceanUniforms = {
-      oceanTexture: { value: oceanTexture }
-    }
-    
-    return new THREE.ShaderMaterial({
-      uniforms: oceanUniforms,
-      vertexShader: oceanVertexShader,
-      fragmentShader: oceanFragmentShader,
-      transparent: true
-    })
-  }, [oceanTexture])
-
   return (
     <group ref={globeGroupRef}>
       {/* Wireframe globe - dengan pointer handlers */}
@@ -625,8 +702,8 @@ function EarthGlobe() {
         onPointerUp={handleGlobePointerUp}
       />
 
-      {/* Solid Ocean Layer */}
-      <mesh geometry={wireframeGeo} material={oceanMat} />
+      {/* Solid Ocean Layer with Enhanced Visual Effects - uses separate high-poly geometry */}
+      <mesh geometry={oceanGeo} material={oceanMat} />
 
       {/* Points globe with custom shaders (mainly for land) */}
       <points ref={pointsRef} geometry={pointsGeo} material={pointsMat} />

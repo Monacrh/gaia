@@ -4,6 +4,8 @@ import type { Configuration } from 'webpack'
 const nextConfig: NextConfig = {
   reactStrictMode: false,
   experimental: {
+    // @ts-expect-error - disable turbopack manually
+    turbo: false, 
     optimizePackageImports: ['three', '@react-three/fiber', '@react-three/drei'],
   },
   webpack: (config: Configuration) => {
