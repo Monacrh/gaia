@@ -169,14 +169,25 @@ export function calculateTemperatureChange(
 }
 
 export function calculateCO2Growth(
-  data: CO2Data[],
-  fromYear: number,
-  toYear: number
+  data: CO2Data[]
 ): number {
-  const fromData = data.find(d => d.year === fromYear)
-  const toData = data.find(d => d.year === toYear)
-  
-  if (!fromData || !toData) return 0
+  // Pastikan data sudah diurutkan berdasarkan tahun (seharusnya sudah dari fetchCO2Emissions)
+  // Tapi kita urutkan lagi untuk keamanan
+  const sortedData = [...data].sort((a, b) => a.year - b.year)
+
+  if (sortedData.length < 2) {
+    return 0 // Tidak cukup data untuk perbandingan
+  }
+
+  // Ambil data paling AWAL yang tersedia
+  const fromData = sortedData[0]
+  // Ambil data paling AKHIR (terbaru) yang tersedia
+  const toData = sortedData[sortedData.length - 1]
+
+  // Pastikan data valid dan hindari pembagian dengan nol
+  if (!fromData || !toData || fromData.value === 0 || fromData.value === null) {
+    return 0
+  }
   
   return ((toData.value - fromData.value) / fromData.value) * 100
 }
@@ -426,13 +437,17 @@ export async function fetchGlobalTemperature(
 export async function fetchCO2Emissions(
   country: string = 'WLD',
   startYear: number = 1960,
-  endYear: number = new Date().getFullYear()
+  endYear: number = new Date().getFullYear() // Kita biarkan parameter ini untuk konsistensi
 ): Promise<CO2Data[]> {
   try {
     console.log('🏭 Fetching CO2 data from World Bank...')
+
+    // Data Bank Dunia sering terlambat. Minta data sampai tahun 2023 (atau 2022) 
+    // untuk memastikan kita mendapatkan hasil.
+    const dataEndYear = 2023; 
     
     const response = await fetch(
-      `https://api.worldbank.org/v2/country/${country}/indicator/EN.ATM.CO2E.PC?date=${startYear}:${endYear}&format=json&per_page=1000`,
+      `https://api.worldbank.org/v2/country/${country}/indicator/EN.ATM.CO2E.PC?date=${startYear}:${dataEndYear}&format=json&per_page=1000`,
       {
         cache: 'force-cache',
         next: { revalidate: 86400 }
@@ -543,8 +558,10 @@ export async function fetchClimateDataForLocation(
     console.log(`🌍 Fetching climate data for ${lat.toFixed(4)}°, ${lon.toFixed(4)}°`)
     
     // Fetch all data in parallel - PASS lat/lon to temperature function
+    // Fetch all data in parallel
     const [temperatures, co2Emissions, currentPollution] = await Promise.all([
-      fetchGlobalTemperature(startYear, endYear, lat, lon), // Pass location!
+      // GANTI ke NASA POWER API, yang lebih ramah CORS dan spesifik lokasi
+      fetchNASAPowerTemperature(lat, lon, startYear, endYear),
       fetchCO2Emissions('WLD', startYear, endYear),
       fetchAirPollution(lat, lon)
     ])
@@ -556,7 +573,7 @@ export async function fetchClimateDataForLocation(
     
     const recentCO2 = co2Emissions[co2Emissions.length - 1]
     const currentCO2 = recentCO2?.value || 0
-    const co2Growth = calculateCO2Growth(co2Emissions, startYear, endYear)
+    const co2Growth = calculateCO2Growth(co2Emissions)
 
     const airQuality = getAQILabel(currentPollution.aqi)
 
@@ -597,7 +614,7 @@ export async function fetchClimateDataForLocation(
     
     const recentCO2 = fallbackCO2[fallbackCO2.length - 1]
     const currentCO2 = recentCO2?.value || 5.5
-    const co2Growth = calculateCO2Growth(fallbackCO2, startYear, endYear)
+    const co2Growth = calculateCO2Growth(fallbackCO2)
     
     return {
       location: { 

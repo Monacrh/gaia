@@ -65,9 +65,15 @@ export default function ClimatePanel() {
           {!isLoadingClimate && climateData && (
             <>
               {/* Location Info */}
+              {/* Location Info */}
               <div className="bg-slate-800/50 p-3 rounded-lg">
                 <p className="text-sm text-gray-400">Selected Location</p>
-                <p className="text-white font-mono">
+                {/* Gunakan 'name' dari objek location */}
+                <p className="text-lg text-white font-semibold">
+                  {climateData.location.name}
+                </p>
+                {/* Kamu masih bisa menampilkan koordinat di bawahnya jika mau */}
+                <p className="text-xs text-gray-400 font-mono">
                   {climateData.location.lat.toFixed(4)}°, {climateData.location.lon.toFixed(4)}°
                 </p>
               </div>
