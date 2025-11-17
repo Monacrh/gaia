@@ -32,7 +32,7 @@ export default function HomePage() {
         <div className="flex items-center justify-between">
           <div className="text-white">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              🌍 Climate Globe
+              🌍 Climate Globes
             </h1>
             <p className="text-blue-200 text-sm md:text-base">
               Interactive Climate Data Visualization
