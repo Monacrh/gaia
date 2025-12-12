@@ -50,7 +50,7 @@ export default function HomePage() {
         <ClimatePanel />
 
         {/* Instructions Overlay */}
-        <div className="absolute bottom-4 left-4 bg-slate-900/80 backdrop-blur-sm rounded-lg p-4 text-white text-sm max-w-xs z-10">
+        {/* <div className="absolute bottom-4 left-4 bg-slate-900/80 backdrop-blur-sm rounded-lg p-4 text-white text-sm max-w-xs z-10">
           <p className="font-semibold mb-2">💡 How to Use:</p>
           <ul className="space-y-1 text-xs text-gray-300">
             <li>• Click anywhere on the globe to view climate data</li>
@@ -58,7 +58,7 @@ export default function HomePage() {
             <li>• Drag the time slider to see changes over time</li>
             <li>• Click Play to animate climate change</li>
           </ul>
-        </div>
+        </div> */}
       </main>
 
       {/* Footer */}
